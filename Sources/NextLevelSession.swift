@@ -463,7 +463,7 @@ extension NextLevelSession {
         
         let duration = sampleBuffer.duration
         if let adjustedBuffer = CMSampleBuffer.createSampleBuffer(fromSampleBuffer: sampleBuffer, withTimeOffset: self._timeOffset, duration: duration) {
-            let presentationTimestamp = adjustedBuffer.presentationTimeStamp)
+            let presentationTimestamp = adjustedBuffer.presentationTimeStamp
             let lastTimestamp = presentationTimestamp + duration
             
             self._audioQueue.async {
