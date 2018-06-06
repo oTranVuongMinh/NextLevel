@@ -2030,8 +2030,8 @@ extension NextLevel {
                         if updatedFormat == nil {
                             updatedFormat = currentFormat
                         } else if let updated = updatedFormat {
-                            let currentDimensions = CMVideoFormatDescriptionGetDimensions(currentFormat.formatDescription)
-                            let updatedDimensions = CMVideoFormatDescriptionGetDimensions(updated.formatDescription)
+                            let currentDimensions = currentFormat.formatDescription.videoDimensions
+                            let updatedDimensions = updated.formatDescription.videoDimensions
                             
                             if currentDimensions.width < updatedDimensions.width && currentDimensions.height < updatedDimensions.height {
                                 updatedFormat = currentFormat
@@ -2054,7 +2054,7 @@ extension NextLevel {
                         try device.lockForConfiguration()
                         device.activeFormat = format
                         if device.activeFormat.isSupported(withFrameRate: frameRate) {
-                            let fps: CMTime = CMTimeMake(1, frameRate)
+                            let fps: CMTime = CMTime(value: 1, timescale: frameRate)
                             device.activeVideoMaxFrameDuration = fps
                             device.activeVideoMinFrameDuration = fps
                         }
@@ -2220,7 +2220,7 @@ extension NextLevel {
             
             var buffer: CVPixelBuffer? = nil
             if let videoFrame = self._lastVideoFrame,
-                let imageBuffer = CMSampleBufferGetImageBuffer(videoFrame) {
+                let imageBuffer = videoFrame.imageBuffer {
                 buffer = imageBuffer
             } else if let arFrame = self._lastARFrame {
                 buffer = arFrame
@@ -2251,8 +2251,8 @@ extension NextLevel {
                 if let context = self._ciContext,
                     let photo = context.uiimage(withPixelBuffer: customFrame) {
                     let croppedPhoto = ratio != nil ? photo.nx_croppedImage(to: ratio!) : photo
-                    if let imageData = UIImageJPEGRepresentation(photo, 1),
-                        let croppedImageData = UIImageJPEGRepresentation(croppedPhoto, 1){
+                    if let imageData = photo.jpegData(compressionQuality: 1),
+                        let croppedImageData = croppedPhoto.jpegData(compressionQuality: 1) {
                         if photoDict == nil {
                             photoDict = [:]
                         }
@@ -2275,8 +2275,8 @@ extension NextLevel {
                 if let context = self._ciContext,
                     let photo = context.uiimage(withSampleBuffer: videoFrame) {
                     let croppedPhoto = ratio != nil ? photo.nx_croppedImage(to: ratio!) : photo
-                    if let imageData = UIImageJPEGRepresentation(photo, 1),
-                    let croppedImageData = UIImageJPEGRepresentation(croppedPhoto, 1){
+                    if let imageData = photo.jpegData(compressionQuality: 1),
+                        let croppedImageData = croppedPhoto.jpegData(compressionQuality: 1) {
                         if photoDict == nil {
                             photoDict = [:]
                         }
@@ -2292,8 +2292,7 @@ extension NextLevel {
                 // add JPEG, thumbnail
                 if let context = self._ciContext,
                     let photo = context.uiimage(withPixelBuffer: arFrame),
-                    let imageData = UIImageJPEGRepresentation(photo, 1) {
-                    
+                    let imageData = photo.jpegData(compressionQuality: 1) {
                     if photoDict == nil {
                         photoDict = [:]
                     }
@@ -2442,7 +2441,7 @@ extension NextLevel {
     internal func handleVideoOutput(sampleBuffer: CMSampleBuffer, session: NextLevelSession) {
         if session.isVideoReady == false {
             if let settings = self.videoConfiguration.avcaptureSettingsDictionary(sampleBuffer: sampleBuffer),
-                let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
+                let formatDescription = sampleBuffer.formatDescription {
                 if !session.setupVideo(withSettings: settings, configuration: self.videoConfiguration, formatDescription: formatDescription) {
                     print("NextLevel, could not setup video session")
                 }
@@ -2458,7 +2457,7 @@ extension NextLevel {
             if let device = self._currentDevice {
                 
                 // check with the client to setup/maintain external render contexts
-                let imageBuffer = self.isVideoCustomContextRenderingEnabled == true ? CMSampleBufferGetImageBuffer(sampleBuffer) : nil
+                let imageBuffer = self.isVideoCustomContextRenderingEnabled == true ? sampleBuffer.formatDescription : nil
                 if let imageBuffer = imageBuffer {
                     if CVPixelBufferLockBaseAddress(imageBuffer, CVPixelBufferLockFlags(rawValue: 0)) == kCVReturnSuccess {
                         // only called from captureQueue
@@ -2494,8 +2493,8 @@ extension NextLevel {
                 
                 if session.currentClipHasVideo == false && (session.currentClipHasAudio == false || self.captureMode == .videoWithoutAudio) {
                     if let audioBuffer = self._lastAudioFrame {
-                        let lastAudioEndTime = CMTimeAdd(CMSampleBufferGetPresentationTimeStamp(audioBuffer), CMSampleBufferGetDuration(audioBuffer))
-                        let videoStartTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                        let lastAudioEndTime = audioBuffer.presentationTimeStamp + audioBuffer.duration
+                        let videoStartTime = sampleBuffer.presentationTimeStamp
                         
                         if lastAudioEndTime > videoStartTime {
                             self.handleAudioOutput(sampleBuffer: audioBuffer, session: session)
@@ -2578,7 +2577,7 @@ extension NextLevel {
     internal func handleAudioOutput(sampleBuffer: CMSampleBuffer, session: NextLevelSession) {
         if session.isAudioReady == false {
             if let settings = self.audioConfiguration.avcaptureSettingsDictionary(sampleBuffer: sampleBuffer),
-                let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
+                let formatDescription = sampleBuffer.formatDescription {
                 if !session.setupAudio(withSettings: settings, configuration: self.audioConfiguration, formatDescription: formatDescription) {
                     print("NextLevel, could not setup audio session")
                 }
@@ -2634,8 +2633,8 @@ extension NextLevel {
     
     private func setupContextIfNecessary() {
         if self._ciContext == nil {
-            let options : [String : AnyObject] = [kCIContextWorkingColorSpace : CGColorSpaceCreateDeviceRGB(),
-                                                  kCIContextUseSoftwareRenderer : NSNumber(booleanLiteral: false)]
+            let options : [CIContextOption : Any] = [CIContextOption.workingColorSpace : CGColorSpaceCreateDeviceRGB(),
+                                                     CIContextOption.useSoftwareRenderer : NSNumber(booleanLiteral: false)]
             if let device = MTLCreateSystemDefaultDevice() {
                 self._ciContext = CIContext(mtlDevice: device, options: options)
             } else if let eaglContext = EAGLContext(api: .openGLES2) {
@@ -2662,7 +2661,7 @@ extension NextLevel {
         self._bufferFormatType = formatType
         
         let pixelBufferPoolMinimumCount = 3
-        let poolAttributes: [String:AnyObject] = [String(kCVPixelBufferPoolMinimumBufferCountKey): NSNumber(integerLiteral: pixelBufferPoolMinimumCount)]
+        let poolAttributes: [String : AnyObject] = [String(kCVPixelBufferPoolMinimumBufferCountKey): NSNumber(integerLiteral: pixelBufferPoolMinimumCount)]
         
         // TODO: doesn't properly support orientation, should reference videoConfiguration settings
         let pixelBufferAttributes: [String:AnyObject] = [String(kCVPixelBufferPixelFormatTypeKey) : NSNumber(integerLiteral: Int(self._bufferFormatType)),
@@ -2872,13 +2871,13 @@ extension NextLevel {
     // application
     
     internal func addApplicationObservers() {
-        NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.handleApplicationWillEnterForeground(_:)), name: .UIApplication.willEnterForegroundNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.handleApplicationDidEnterBackground(_:)), name: .UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.handleApplicationWillEnterForeground(_:)), name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.handleApplicationDidEnterBackground(_:)), name: UIApplication.didEnterBackgroundNotification, object: nil)
     }
     
     internal func removeApplicationObservers() {
-        NotificationCenter.default.removeObserver(self, name: .UIApplication.willEnterForegroundNotification, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
     }
     
     @objc internal func handleApplicationWillEnterForeground(_ notification: Notification) {
@@ -2966,13 +2965,13 @@ extension NextLevel {
     internal func addDeviceObservers() {
         NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.deviceSubjectAreaDidChange(_:)), name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.deviceInputPortFormatDescriptionDidChange(_:)), name: .AVCaptureInputPortFormatDescriptionDidChange, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.deviceOrientationDidChange(_:)), name: .UIDevice.orientationDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.deviceOrientationDidChange(_:)), name: UIDevice.orientationDidChangeNotification, object: nil)
     }
     
     internal func removeDeviceObservers() {
         NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
         NotificationCenter.default.removeObserver(self, name: .AVCaptureInputPortFormatDescriptionDidChange, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .UIDevice.orientationDidChangeNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
     }
     
     @objc internal func deviceSubjectAreaDidChange(_ notification: NSNotification) {
