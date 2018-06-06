@@ -2251,8 +2251,8 @@ extension NextLevel {
                 if let context = self._ciContext,
                     let photo = context.uiimage(withPixelBuffer: customFrame) {
                     let croppedPhoto = ratio != nil ? photo.nx_croppedImage(to: ratio!) : photo
-                    if let imageData =  photo.jpegData(compressionQuality: 1.0),
-                        let croppedImageData =  croppedPhoto.jpegData(compressionQuality: 1.0) {
+                    if let imageData = photo.jpegData(compressionQuality: 1),
+                        let croppedImageData = croppedPhoto.jpegData(compressionQuality: 1) {
                         if photoDict == nil {
                             photoDict = [:]
                         }
@@ -2275,8 +2275,8 @@ extension NextLevel {
                 if let context = self._ciContext,
                     let photo = context.uiimage(withSampleBuffer: videoFrame) {
                     let croppedPhoto = ratio != nil ? photo.nx_croppedImage(to: ratio!) : photo
-                    if let imageData = photo.jpegData(compressionQuality: 1.0),
-                    let croppedImageData = croppedPhoto.jpegData(compressionQuality: 1.0) {
+                    if let imageData = photo.jpegData(compressionQuality: 1),
+                        let croppedImageData = croppedPhoto.jpegData(compressionQuality: 1) {
                         if photoDict == nil {
                             photoDict = [:]
                         }
@@ -2292,8 +2292,7 @@ extension NextLevel {
                 // add JPEG, thumbnail
                 if let context = self._ciContext,
                     let photo = context.uiimage(withPixelBuffer: arFrame),
-                    let imageData =  photo.jpegData(compressionQuality: 1.0) {
-                    
+                    let imageData = photo.jpegData(compressionQuality: 1) {
                     if photoDict == nil {
                         photoDict = [:]
                     }
@@ -2634,8 +2633,8 @@ extension NextLevel {
     
     private func setupContextIfNecessary() {
         if self._ciContext == nil {
-            let options : [CIContextOption : AnyObject] = [CIContextOption.workingColorSpace : CGColorSpaceCreateDeviceRGB(),
-                                                  CIContextOption.useSoftwareRenderer : NSNumber(booleanLiteral: false)]
+            let options : [CIContextOption : Any] = [CIContextOption.workingColorSpace : CGColorSpaceCreateDeviceRGB(),
+                                                     CIContextOption.useSoftwareRenderer : NSNumber(booleanLiteral: false)]
             if let device = MTLCreateSystemDefaultDevice() {
                 self._ciContext = CIContext(mtlDevice: device, options: options)
             } else if let eaglContext = EAGLContext(api: .openGLES2) {
@@ -2662,7 +2661,7 @@ extension NextLevel {
         self._bufferFormatType = formatType
         
         let pixelBufferPoolMinimumCount = 3
-        let poolAttributes: [String:AnyObject] = [String(kCVPixelBufferPoolMinimumBufferCountKey): NSNumber(integerLiteral: pixelBufferPoolMinimumCount)]
+        let poolAttributes: [String : AnyObject] = [String(kCVPixelBufferPoolMinimumBufferCountKey): NSNumber(integerLiteral: pixelBufferPoolMinimumCount)]
         
         // TODO: doesn't properly support orientation, should reference videoConfiguration settings
         let pixelBufferAttributes: [String:AnyObject] = [String(kCVPixelBufferPixelFormatTypeKey) : NSNumber(integerLiteral: Int(self._bufferFormatType)),
