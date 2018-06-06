@@ -59,7 +59,7 @@ public enum NextLevelDevicePosition: Int, CustomStringConvertible {
     case back = 0
     case front
     
-    public var uikitType: UIImagePickerControllerCameraDevice {
+    public var uikitType: UIImagePickerController.CameraDevice {
         switch self {
         case .back:
             return .rear
@@ -1726,7 +1726,7 @@ extension NextLevel {
     /// - Returns: `true` when the focal length and principle point parameters are successfully calculated.
     public func focalLengthAndPrinciplePoint(focalLengthX: inout Float, focalLengthY: inout Float, principlePointX: inout Float, principlePointY: inout Float) -> Bool {
         if let device: AVCaptureDevice = self._currentDevice {
-            let dimensions = CMVideoFormatDescriptionGetPresentationDimensions(device.activeFormat.formatDescription, true, true)
+            let dimensions = device.activeFormat.formatDescription.getVideoPresentationDimensions(usePixelAspectRatio: true, useCleanAperture: true)
         
             principlePointX = Float(dimensions.width) * 0.5
             principlePointY = Float(dimensions.height) * 0.5
@@ -1997,7 +1997,7 @@ extension NextLevel {
                             return
                     }
                     
-                    let fps: CMTime = CMTimeMake(1, newValue)
+                    let fps: CMTime = CMTime(value: 1, timescale: newValue)
                     do {
                         try device.lockForConfiguration()
                         
@@ -2872,13 +2872,13 @@ extension NextLevel {
     // application
     
     internal func addApplicationObservers() {
-        NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.handleApplicationWillEnterForeground(_:)), name: .UIApplicationWillEnterForeground, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.handleApplicationDidEnterBackground(_:)), name: .UIApplicationDidEnterBackground, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.handleApplicationWillEnterForeground(_:)), name: .UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(NextLevel.handleApplicationDidEnterBackground(_:)), name: .UIApplication.didEnterBackgroundNotification, object: nil)
     }
     
     internal func removeApplicationObservers() {
-        NotificationCenter.default.removeObserver(self, name: .UIApplicationWillEnterForeground, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .UIApplicationDidEnterBackground, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .UIApplication.didEnterBackgroundNotification, object: nil)
     }
     
     @objc internal func handleApplicationWillEnterForeground(_ notification: Notification) {
