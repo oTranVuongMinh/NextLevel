@@ -75,14 +75,14 @@ class CameraViewController: UIViewController {
         super.viewDidLoad()
 
         self.view.backgroundColor = UIColor.black
-        self.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        self.view.autoresizingMask = [UIView.AutoresizingMask.flexibleWidth, UIView.AutoresizingMask.flexibleHeight]
         
         let screenBounds = UIScreen.main.bounds
 
         // preview
         self.previewView = UIView(frame: screenBounds)
         if let previewView = self.previewView {
-            previewView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            previewView.autoresizingMask = [UIView.AutoresizingMask.flexibleWidth, UIView.AutoresizingMask.flexibleHeight]
             previewView.backgroundColor = UIColor.black
             NextLevel.shared.previewLayer.frame = previewView.bounds
             previewView.layer.addSublayer(NextLevel.shared.previewLayer)
@@ -107,16 +107,16 @@ class CameraViewController: UIViewController {
         
         self.flipButton = UIButton(type: .custom)
         if let flipButton = self.flipButton {
-            flipButton.setImage(UIImage(named: "flip_button"), for: .normal)
+            flipButton.setImage(UIImage(named: "flip_button"), for: UIControl.State.normal)
             flipButton.sizeToFit()
-            flipButton.addTarget(self, action: #selector(handleFlipButton(_:)), for: .touchUpInside)
+            flipButton.addTarget(self, action: #selector(handleFlipButton(_:)), for: UIControl.Event.touchUpInside)
         }
         
         self.saveButton = UIButton(type: .custom)
         if let saveButton = self.saveButton {
-            saveButton.setImage(UIImage(named: "save_button"), for: .normal)
+            saveButton.setImage(UIImage(named: "save_button"), for: UIControl.State.normal)
             saveButton.sizeToFit()
-            saveButton.addTarget(self, action: #selector(handleSaveButton(_:)), for: .touchUpInside)
+            saveButton.addTarget(self, action: #selector(handleSaveButton(_:)), for: UIControl.Event.touchUpInside)
         }
         
         // capture control "dock"
@@ -124,7 +124,7 @@ class CameraViewController: UIViewController {
         self.controlDockView = UIView(frame: CGRect(x: 0, y: screenBounds.height - controlDockHeight, width: screenBounds.width, height: controlDockHeight))
         if let controlDockView = self.controlDockView {
             controlDockView.backgroundColor = UIColor.clear
-            controlDockView.autoresizingMask = [.flexibleTopMargin]
+            controlDockView.autoresizingMask = [UIView.AutoresizingMask.flexibleTopMargin]
             self.view.addSubview(controlDockView)
             
             if let recordButton = self.recordButton {
@@ -146,7 +146,7 @@ class CameraViewController: UIViewController {
         // gestures
         self.gestureView = UIView(frame: screenBounds)
         if let gestureView = self.gestureView, let controlDockView = self.controlDockView {
-            gestureView.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
+            gestureView.autoresizingMask = [UIView.AutoresizingMask.flexibleWidth, UIView.AutoresizingMask.flexibleBottomMargin]
             gestureView.frame.size.height -= controlDockView.frame.height
             gestureView.backgroundColor = .clear
             self.view.addSubview(gestureView)
@@ -226,7 +226,7 @@ extension CameraViewController {
     
     internal func startCapture() {
         self.photoTapGestureRecognizer?.isEnabled = false
-        UIView.animate(withDuration: 0.15, delay: 0, options: .curveEaseInOut, animations: {
+        UIView.animate(withDuration: 0.15, delay: 0, options: UIView.AnimationOptions.curveEaseInOut, animations: {
             self.recordButton?.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
         }) { (completed: Bool) in
         }
@@ -234,7 +234,7 @@ extension CameraViewController {
     }
     
     internal func pauseCapture() {
-        UIView.animate(withDuration: 0.1, delay: 0, options: .curveEaseOut, animations: {
+        UIView.animate(withDuration: 0.1, delay: 0, options: UIView.AnimationOptions.curveEaseOut, animations: {
             self.recordButton?.transform = .identity
         }) { (completed: Bool) in
         }
