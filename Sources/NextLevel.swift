@@ -570,7 +570,7 @@ public protocol NextLevelPhotoDelegate: NSObjectProtocol {
 // MARK: - constants
 
 private let NextLevelCaptureSessionIdentifier = "engineering.NextLevel.captureSession"
-private let NextLevelCaptureSessionSpecificKey = DispatchSpecificKey<NSObject>()
+private let NextLevelCaptureSessionSpecificKey = DispatchSpecificKey<()>()
 private let NextLevelRequiredMinimumStorageSpaceInBytes: UInt64 = 49999872 // ~47 MB
 
 // MARK: - NextLevel state
@@ -775,7 +775,7 @@ public class NextLevel: NSObject {
         self.previewLayer.videoGravity = AVLayerVideoGravity.resizeAspectFill
         
         self._sessionQueue = DispatchQueue(label: NextLevelCaptureSessionIdentifier, qos: .userInteractive, target: DispatchQueue.global())
-        self._sessionQueue.setSpecific(key: NextLevelCaptureSessionSpecificKey, value: self._sessionQueue)
+        self._sessionQueue.setSpecific(key: NextLevelCaptureSessionSpecificKey, value: ())
         
         self.videoConfiguration = NextLevelVideoConfiguration()
         self.audioConfiguration = NextLevelAudioConfiguration()
@@ -850,7 +850,7 @@ extension NextLevel {
     public func requestAuthorization(forMediaType mediaType: AVMediaType) {
         AVCaptureDevice.requestAccess(for: mediaType) { (granted: Bool) in
             let status: NextLevelAuthorizationStatus = (granted == true) ? .authorized : .notAuthorized
-            self.executeClosureAsyncOnMainQueueIfNecessary {
+            DispatchQueue.main.async {
                 self.delegate?.nextLevel(self, didUpdateAuthorizationStatus: status, forMediaType: mediaType)
             }
         }
@@ -997,7 +997,7 @@ extension NextLevel {
                     self.arConfiguration?.session?.run(config, options: options)
                     self._arRunning = true
                     
-                    self.executeClosureAsyncOnMainQueueIfNecessary {
+                    DispatchQueue.main.async {
                         self.delegate?.nextLevelSessionDidStart(self)
                     }
                 }
@@ -1072,9 +1072,9 @@ extension NextLevel {
                 if captureDevice != self._currentDevice {
                     self.configureDevice(captureDevice: captureDevice, mediaType: AVMediaType.video)
                     
-                    let changingPosition = captureDevice.position != self._currentDevice?.position
-                    if changingPosition == true {
-                        self.executeClosureAsyncOnMainQueueIfNecessary {
+                    let changingPosition = (captureDevice.position != self._currentDevice?.position)
+                    if changingPosition {
+                        DispatchQueue.main.async {
                             self.deviceDelegate?.nextLevelDevicePositionWillChange(self)
                         }
                     }
@@ -1084,8 +1084,8 @@ extension NextLevel {
                     self.didChangeValue(forKey: "currentDevice")
                     self._requestedDevice = nil
                     
-                    if changingPosition == true {
-                        self.executeClosureAsyncOnMainQueueIfNecessary {
+                    if changingPosition {
+                        DispatchQueue.main.async {
                             self.deviceDelegate?.nextLevelDevicePositionDidChange(self)
                         }
                     }
@@ -1093,7 +1093,7 @@ extension NextLevel {
             }
         }
         
-        if shouldConfigureAudio == true {
+        if shouldConfigureAudio {
             if let audioDevice = AVCaptureDevice.audioDevice() {
                 self.configureDevice(captureDevice: audioDevice, mediaType: AVMediaType.audio)
             }
@@ -1101,14 +1101,14 @@ extension NextLevel {
         
         self.commitConfiguration()
         
-        if shouldConfigureVideo == true {
-            self.executeClosureAsyncOnMainQueueIfNecessary {
+        if shouldConfigureVideo {
+            DispatchQueue.main.async {
                 self.delegate?.nextLevel(self, didUpdateVideoConfiguration: self.videoConfiguration)
             }
         }
         
-        if shouldConfigureAudio == true {
-            self.executeClosureAsyncOnMainQueueIfNecessary {
+        if shouldConfigureAudio {
+            DispatchQueue.main.async {
                 self.delegate?.nextLevel(self, didUpdateAudioConfiguration: self.audioConfiguration)
             }
         }
@@ -1788,7 +1788,7 @@ extension NextLevel {
     }
     
     internal func focusStarted() {
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.deviceDelegate?.nextLevelWillStartFocus(self)
         }
     }
@@ -1815,7 +1815,7 @@ extension NextLevel {
                 }
             }
             
-            self.executeClosureAsyncOnMainQueueIfNecessary {
+            DispatchQueue.main.async {
                 self.deviceDelegate?.nextLevelDidStopFocus(self)
             }
             
@@ -1823,7 +1823,7 @@ extension NextLevel {
     }
     
     internal func exposureStarted() {
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.deviceDelegate?.nextLevelWillChangeExposure(self)
         }
     }
@@ -1851,20 +1851,20 @@ extension NextLevel {
                 }
             }
             
-            self.executeClosureAsyncOnMainQueueIfNecessary {
+            DispatchQueue.main.async {
                 self.deviceDelegate?.nextLevelDidChangeExposure(self)
             }
         }
     }
     
     internal func whiteBalanceStarted() {
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.deviceDelegate?.nextLevelWillChangeWhiteBalance(self)
         }
     }
     
     internal func whiteBalanceEnded() {
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.deviceDelegate?.nextLevelDidChangeWhiteBalance(self)
         }
     }
@@ -1890,19 +1890,19 @@ extension NextLevel {
             }
         }
         
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.flashDelegate?.nextLevelFlashActiveChanged(self)
         }
     }
     
     internal func torchActiveChanged() {
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.flashDelegate?.nextLevelTorchActiveChanged(self)
         }
     }
     
     internal func flashAndTorchAvailabilityChanged() {
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.flashDelegate?.nextLevelFlashAndTorchAvailabilityChanged(self)
         }
     }
@@ -2060,7 +2060,7 @@ extension NextLevel {
                         }
                         device.unlockForConfiguration()
                         
-                        self.executeClosureAsyncOnMainQueueIfNecessary {
+                        DispatchQueue.main.async {
                             self.deviceDelegate?.nextLevel(self, didChangeDeviceFormat: format)
                         }
                     } catch {
@@ -2204,7 +2204,7 @@ extension NextLevel {
     }
     
     internal func videoZoomFactorChanged() {
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.videoDelegate?.nextLevel(self, didUpdateVideoZoomFactor: self.videoZoomFactor)
         }
     }
@@ -2306,8 +2306,7 @@ extension NextLevel {
             //if let tData = thumbnailData {
             //    photoDict[NextLevelPhotoThumbnailKey] = tData
             //}
-            
-            self.executeClosureSyncOnMainQueue {
+            DispatchQueue.main.sync {
                 self.videoDelegate?.nextLevel(self, didCompletePhotoCaptureFromVideoFrame: photoDict)
             }
             
@@ -2362,31 +2361,27 @@ extension NextLevel {
         
         self.executeClosureAsyncOnSessionQueueIfNecessary {
             if let session = self._recordingSession {
-                if session.clipStarted {
+                if session.currentClipHasStarted {
                     session.endClip(completionHandler: { (sessionClip: NextLevelClip?, error: Error?) in
-                        if let clip = sessionClip {
-                            self.executeClosureAsyncOnMainQueueIfNecessary {
-                                self.videoDelegate?.nextLevel(self, didCompleteClip: clip, inSession: session)
+                        if let sessionClip = sessionClip {
+                            DispatchQueue.main.async {
+                                self.videoDelegate?.nextLevel(self, didCompleteClip: sessionClip, inSession: session)
                             }
-                            if let handler = completionHandler {
-                                handler()
+                            DispatchQueue.main.async {
+                                completionHandler?()
                             }
                         } else if let _ = error {
                             // TODO, report error
-                            if let handler = completionHandler {
-                                handler()
+                            DispatchQueue.main.async {
+                                completionHandler?()
                             }
                         }
                     })
-                } else {
-                    if let handler = completionHandler {
-                        self.executeClosureAsyncOnMainQueueIfNecessary(withClosure: handler)
-                    }
+                } else if let completionHandler = completionHandler {
+                    DispatchQueue.main.async(execute: completionHandler)
                 }
-            } else {
-                if let handler = completionHandler {
-                    self.executeClosureAsyncOnMainQueueIfNecessary(withClosure: handler)
-                }
+            } else if let completionHandler = completionHandler {
+                DispatchQueue.main.async(execute: completionHandler)
             }
         }
     }
@@ -2451,9 +2446,15 @@ extension NextLevel {
             }
         }
         
-        if self._recording && (session.isAudioReady || self.captureMode == .videoWithoutAudio) && session.clipStarted {
+        if self._recording && (session.isAudioReady || self.captureMode == .videoWithoutAudio) && session.currentClipHasStarted {
             self.beginRecordingNewClipIfNecessary()
-                        
+            
+            let minTimeBetweenFrames = 0.004
+            let sleepDuration = minTimeBetweenFrames - (CACurrentMediaTime() - self._lastVideoFrameTimeInterval)
+            if sleepDuration > 0 {
+                Thread.sleep(forTimeInterval: sleepDuration)
+            }
+            
             if let device = self._currentDevice {
                 
                 // check with the client to setup/maintain external render contexts
@@ -2518,7 +2519,7 @@ extension NextLevel {
             }
         }
 
-        if self._recording && (session.isAudioReady || self.captureMode == .videoWithoutAudio) && session.clipStarted {
+        if self._recording && (session.isAudioReady || self.captureMode == .videoWithoutAudio) && session.currentClipHasStarted {
             self.beginRecordingNewClipIfNecessary()
 
             let minTimeBetweenFrames = 0.004
@@ -2588,7 +2589,7 @@ extension NextLevel {
             }
         }
         
-        if self._recording && session.isVideoReady && session.clipStarted && session.currentClipHasVideo {
+        if self._recording && session.isVideoReady && session.currentClipHasStarted && session.currentClipHasVideo {
             self.beginRecordingNewClipIfNecessary()
             
             session.appendAudio(withSampleBuffer: sampleBuffer, completionHandler: { (success: Bool) -> Void in
@@ -2804,6 +2805,22 @@ extension NextLevel: AVCapturePhotoCaptureDelegate {
     
 }
 
+// MARK: - AVCaptureDepthDataOutputDelegate
+
+@available(iOS 11.0, *)
+extension NextLevel: AVCaptureDepthDataOutputDelegate {
+    
+    public func depthDataOutput(_ output: AVCaptureDepthDataOutput, didOutput depthData: AVDepthData, timestamp: CMTime, connection: AVCaptureConnection) {
+        DispatchQueue.main.async {
+            
+        }
+    }
+    
+    public func depthDataOutput(_ output: AVCaptureDepthDataOutput, didDrop depthData: AVDepthData, timestamp: CMTime, connection: AVCaptureConnection, reason: AVCaptureOutput.DataDroppedReason) {
+    }
+    
+}
+
 #if USE_ARKIT
 // MARK: - ARSession
 
@@ -2847,16 +2864,12 @@ extension NextLevel {
         DispatchQueue.main.async(execute: closure)
     }
     
-    internal func executeClosureSyncOnMainQueue(withClosure closure: @escaping () -> Void) {
-        DispatchQueue.main.sync(execute: closure)
-    }
-    
     internal func executeClosureAsyncOnSessionQueueIfNecessary(withClosure closure: @escaping () -> Void) {
         self._sessionQueue.async(execute: closure)
     }
     
     internal func executeClosureSyncOnSessionQueueIfNecessary(withClosure closure: @escaping () -> Void) {
-        if DispatchQueue.getSpecific(key: NextLevelCaptureSessionSpecificKey) == self._sessionQueue {
+        if DispatchQueue.getSpecific(key: NextLevelCaptureSessionSpecificKey) != nil {
             closure()
         } else {
             self._sessionQueue.sync(execute: closure)
@@ -2913,14 +2926,13 @@ extension NextLevel {
     @objc internal func handleSessionDidStartRunning(_ notification: Notification) {
         //self.performRecoveryCheckIfNecessary()
         // TODO
-        
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.delegate?.nextLevelSessionDidStart(self)
         }
     }
     
     @objc internal func handleSessionDidStopRunning(_ notification: Notification) {
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.delegate?.nextLevelSessionDidStop(self)
         }
     }
@@ -2943,19 +2955,19 @@ extension NextLevel {
     }
     
     @objc public func handleSessionWasInterrupted(_ notification: Notification) {
-        self.executeClosureAsyncOnMainQueueIfNecessary {
-            if self._recording == true {
+        DispatchQueue.main.async {
+            if self._recording {
                 self.delegate?.nextLevelSessionDidStop(self)
             }
             
-            self.executeClosureAsyncOnMainQueueIfNecessary {
+            DispatchQueue.main.async {
                 self.delegate?.nextLevelSessionWasInterrupted(self)
             }
         }
     }
     
     @objc public func handleSessionInterruptionEnded(_ notification: Notification) {
-        self.executeClosureAsyncOnMainQueueIfNecessary {
+        DispatchQueue.main.async {
             self.delegate?.nextLevelSessionInterruptionEnded(self)
         }
     }

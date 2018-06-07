@@ -256,6 +256,15 @@ extension CameraViewController {
                 })
             } else if let lastClipUrl = NextLevel.shared.session?.lastClipUrl {
                 self.saveVideo(withURL: lastClipUrl)
+            } else if let clipHasStarted = NextLevel.shared.session?.currentClipHasStarted,
+                clipHasStarted == true {
+                NextLevel.shared.session?.endClip(completionHandler: { (clip, error) in
+                    if error == nil {
+                        self.saveVideo(withURL: (clip?.url)!)
+                    } else {
+                        print("Error saving video: \(error?.localizedDescription ?? "")")
+                    }
+                })
             } else {
                 // prompt that the video has been saved
                 let alertController = UIAlertController(title: "Video Capture", message: "Not enough video captured!", preferredStyle: .alert)
@@ -266,6 +275,32 @@ extension CameraViewController {
         
         }
         
+    }
+    
+    internal func authorizePhotoLibaryIfNecessary() {
+        let authorizationStatus = PHPhotoLibrary.authorizationStatus()
+        switch authorizationStatus {
+        case .restricted:
+            fallthrough
+        case .denied:
+            let alertController = UIAlertController(title: "Oh no!", message: "Access denied.", preferredStyle: .alert)
+            let okAction = UIAlertAction(title: "OK", style: .default, handler: nil)
+            alertController.addAction(okAction)
+            self.present(alertController, animated: true, completion: nil)
+            break
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization({ (status) in
+                if status == .authorized {
+                    
+                } else {
+                    
+                }
+            })
+            break
+        case .authorized:
+            
+            break
+        }
     }
     
     internal func saveVideo(withURL url: URL) {

@@ -29,7 +29,7 @@ import AVFoundation
 // MARK: - NextLevelSession
 
 /// NextLevelSession, a powerful object for managing and editing a set of recorded media clips.
-public class NextLevelSession: NSObject {
+public class NextLevelSession {
     
     /// Output directory for a session.
     public var outputDirectory: String
@@ -108,9 +108,9 @@ public class NextLevelSession: NSObject {
     }
     
     /// True if the current clip recording has been started.
-    public var clipStarted: Bool {
+    public var currentClipHasStarted: Bool {
         get {
-            return self._clipStarted
+            return self._currentClipHasStarted
         }
     }
     
@@ -178,13 +178,13 @@ public class NextLevelSession: NSObject {
     
     internal var _audioQueue: DispatchQueue
     internal var _sessionQueue: DispatchQueue
-    internal var _sessionQueueKey: DispatchSpecificKey<NSObject>
+    internal var _sessionQueueKey: DispatchSpecificKey<()>
     
     internal var _currentClipDuration: CMTime = CMTime.zero
     internal var _currentClipHasAudio: Bool = false
     internal var _currentClipHasVideo: Bool = false
 
-    internal var _clipStarted: Bool = false
+    internal var _currentClipHasStarted: Bool = false
     internal var _timeOffset: CMTime = CMTime.invalid
     internal var _startTimestamp: CMTime = CMTime.invalid
     internal var _lastAudioTimestamp: CMTime = CMTime.invalid
@@ -192,7 +192,7 @@ public class NextLevelSession: NSObject {
     
     private let NextLevelSessionAudioQueueIdentifier = "engineering.NextLevel.session.audioQueue"
     private let NextLevelSessionQueueIdentifier = "engineering.NextLevel.sessionQueue"
-    private let NextLevelSessionSpecificKey = DispatchSpecificKey<NSObject>()
+    private let NextLevelSessionSpecificKey = DispatchSpecificKey<()>()
     
     // MARK: - object lifecycle
     
@@ -201,14 +201,14 @@ public class NextLevelSession: NSObject {
     /// - Parameters:
     ///   - queue: Queue for a session operations
     ///   - queueKey: Key for re-calling the session queue from the system
-    convenience init(queue: DispatchQueue, queueKey: DispatchSpecificKey<NSObject>) {
+    convenience init(queue: DispatchQueue, queueKey: DispatchSpecificKey<()>) {
         self.init()
         self._sessionQueue = queue
         self._sessionQueueKey = queueKey
     }
     
-    /// Initialize.
-    override init() {
+    /// Initializer.
+    public init() {
         self._identifier = UUID()
         self._date = Date()
         self.outputDirectory = NSTemporaryDirectory()
@@ -217,10 +217,8 @@ public class NextLevelSession: NSObject {
 
         // should always use init(queue:queueKey:), but this may be good for the future
         self._sessionQueue = DispatchQueue(label: NextLevelSessionQueueIdentifier)
-        self._sessionQueue.setSpecific(key: NextLevelSessionSpecificKey, value: self._sessionQueue)
+        self._sessionQueue.setSpecific(key: NextLevelSessionSpecificKey, value: ())
         self._sessionQueueKey = NextLevelSessionSpecificKey
-        
-        super.init()
     }
     
     deinit {
@@ -324,7 +322,7 @@ extension NextLevelSession {
                     }
                     
                     if writer.startWriting() {
-                        self._clipStarted = true
+                        self._currentClipHasStarted = true
                         self._timeOffset = CMTime.zero
                         self._startTimestamp = CMTime.invalid
                     } else {
@@ -340,7 +338,7 @@ extension NextLevelSession {
     
     internal func destroyWriter() {
         self._writer = nil
-        self._clipStarted = false
+        self._currentClipHasStarted = false
         self._timeOffset = CMTime.zero
         self._startTimestamp = CMTime.invalid
         self._currentClipDuration = CMTime.zero
@@ -532,8 +530,8 @@ extension NextLevelSession {
     public func endClip(completionHandler: NextLevelSessionEndClipCompletionHandler?) {
         self.executeClosureSyncOnSessionQueueIfNecessary {
             self._audioQueue.sync {
-                if self.clipStarted {
-                    self._clipStarted = false
+                if self.currentClipHasStarted {
+                    self._currentClipHasStarted = false
                     
                     if let writer = self._writer {
                         if !self.currentClipHasAudio && !self.currentClipHasVideo {
@@ -542,9 +540,9 @@ extension NextLevelSession {
                             self.removeFile(fileUrl: writer.outputURL)
                             self.destroyWriter()
                             
-                            if let handler = completionHandler {
+                            if let completionHandler = completionHandler {
                                 self.executeClosureAsyncOnMainQueueIfNecessary {
-                                    handler(nil, nil)
+                                    completionHandler(nil, nil)
                                 }
                             }
                             
@@ -559,9 +557,9 @@ extension NextLevelSession {
                     }
                 }
                 
-                if let handler = completionHandler {
+                if let completionHandler = completionHandler {
                     self.executeClosureAsyncOnMainQueueIfNecessary {
-                        handler(nil, NextLevelError.notReadyToRecord)
+                        completionHandler(nil, NextLevelError.notReadyToRecord)
                     }
                 }
             }
@@ -576,8 +574,8 @@ extension NextLevelSession {
             self.destroyWriter()
             
             self.executeClosureAsyncOnMainQueueIfNecessary {
-                if let handler = completionHandler {
-                    handler(clip, error)
+                if let completionHandler = completionHandler {
+                    completionHandler(clip, error)
                 }
             }
         }
@@ -631,7 +629,9 @@ extension NextLevelSession {
     /// - Parameter clip: Clip to be removed
     public func remove(clip: NextLevelClip) {
         self.executeClosureSyncOnSessionQueueIfNecessary {
-            if let idx = self._clips.index(of: clip) {
+            if let idx = self._clips.index(where: { (clipToEvaluate) -> Bool in
+                return clip.uuid == clipToEvaluate.uuid
+            }) {
                 self._clips.remove(at: idx)
                 self._duration = self._duration - clip.duration
             }
@@ -695,7 +695,7 @@ extension NextLevelSession {
         self.executeClosureAsyncOnSessionQueueIfNecessary {
             let filename = "\(self.identifier.uuidString)-NL-merged.\(self.fileExtension)"
 
-            let outputURL: URL? = NextLevelClip.clipURL(withFilename: filename, directoryPath: self.outputDirectory)
+            let outputURL = NextLevelClip.clipURL(withFilename: filename, directoryPath: self.outputDirectory)
             var asset: AVAsset? = nil
             
             if !self._clips.isEmpty {
@@ -767,20 +767,19 @@ extension NextLevelSession {
                     }
                   
                     if !clip.isMutedOnMerge {
-                      var audioTime = currentTime
-                      for audioAssetTrack in audioAssetTracks {
+                        var audioTime = currentTime
+                        for audioAssetTrack in audioAssetTracks {
                         if audioTrack == nil {
-                          let audioTracks = composition.tracks(withMediaType: AVMediaType.audio)
+                            let audioTracks = composition.tracks(withMediaType: AVMediaType.audio)
                           
-                          if audioTracks.count > 0 {
-                            audioTrack = audioTracks.first
-                          } else {
-                            audioTrack = composition.addMutableTrack(withMediaType: AVMediaType.audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-                          }
-                          
+                            if audioTracks.count > 0 {
+                                audioTrack = audioTracks.first
+                            } else {
+                                audioTrack = composition.addMutableTrack(withMediaType: AVMediaType.audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+                            }
                         }
                         if let foundTrack = audioTrack {
-                          audioTime = self.appendTrack(track: audioAssetTrack, toCompositionTrack: foundTrack, withStartTime: audioTime, range: maxRange)
+                            audioTime = self.appendTrack(track: audioAssetTrack, toCompositionTrack: foundTrack, withStartTime: audioTime, range: maxRange)
                         }
                       }
                     }
@@ -827,9 +826,8 @@ extension NextLevelSession {
             self.removeFile(fileUrl: url)
             self._clipFilenameCount += 1
             return url
-        } else {
-            return nil
         }
+        return nil
     }
     
     internal func removeFile(fileUrl: URL) {
@@ -860,7 +858,7 @@ extension NextLevelSession {
     }
     
     internal func executeClosureSyncOnSessionQueueIfNecessary(withClosure closure: @escaping () -> Void) {
-        if DispatchQueue.getSpecific(key: self._sessionQueueKey) == self._sessionQueue {
+        if DispatchQueue.getSpecific(key: self._sessionQueueKey) != nil {
             closure()
         } else {
             self._sessionQueue.sync(execute: closure)
