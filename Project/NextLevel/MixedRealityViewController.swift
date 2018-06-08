@@ -305,11 +305,11 @@ extension MixedRealityViewController {
     }
     
     internal func pauseCapture() {
-        UIView.animate(withDuration: 0.1, delay: 0, options: .curveEaseOut, animations: {
+        UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseOut, animations: {
             self.recordButton?.transform = .identity
         }) { (completed: Bool) in
+            NextLevel.shared.pause()
         }
-        NextLevel.shared.pause()
     }
     
     internal func endCapture() {
@@ -317,18 +317,17 @@ extension MixedRealityViewController {
         
         if let session = NextLevel.shared.session {
             if session.clips.count > 1 {
-                NextLevel.shared.session?.mergeClips(usingPreset: AVAssetExportPresetHighestQuality, completionHandler: { (url: URL?, error: Error?) in
+                session.mergeClips(usingPreset: AVAssetExportPresetHighestQuality, completionHandler: { (url: URL?, error: Error?) in
                     if let videoUrl = url {
                         self.saveVideo(withURL: videoUrl)
                     } else if let _ = error {
                         print("failed to merge clips at the end of capture \(String(describing: error))")
                     }
                 })
-            } else if let videoUrl = NextLevel.shared.session?.lastClipUrl {
-                self.saveVideo(withURL: videoUrl)
-            } else if let clipHasStarted = NextLevel.shared.session?.currentClipHasStarted,
-                clipHasStarted == true {
-                NextLevel.shared.session?.endClip(completionHandler: { (clip, error) in
+            } else if let lastClipUrl = session.lastClipUrl {
+                self.saveVideo(withURL: lastClipUrl)
+            } else if session.currentClipHasStarted {
+                session.endClip(completionHandler: { (clip, error) in
                     if error == nil {
                         self.saveVideo(withURL: (clip?.url)!)
                     } else {

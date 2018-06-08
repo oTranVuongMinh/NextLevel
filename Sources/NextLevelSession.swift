@@ -69,20 +69,14 @@ public class NextLevelSession {
     /// Checks if the session is setup for recording video
     public var isVideoReady: Bool {
         get {
-            if let videoInput = self._videoInput {
-                return videoInput.isReadyForMoreMediaData
-            }
-            return false
+            return self._videoInput?.isReadyForMoreMediaData ?? false
         }
     }
     
     /// Checks if the session is setup for recording audio
     public var isAudioReady: Bool {
         get {
-            if let audioInput = self._audioInput {
-                return audioInput.isReadyForMoreMediaData
-            }
-            return false
+            return self._audioInput?.isReadyForMoreMediaData ?? false
         }
     }
 
@@ -94,9 +88,9 @@ public class NextLevelSession {
     }
 
     /// Duration of a session, the sum of all recorded clips.
-    public var duration: CMTime {
+    public var totalDuration: CMTime {
         get {
-            return self._duration + self._currentClipDuration
+            return CMTimeAdd(self._totalDuration, self._currentClipDuration)
         }
     }
 
@@ -164,7 +158,7 @@ public class NextLevelSession {
     internal var _identifier: UUID
     internal var _date: Date
     
-    internal var _duration: CMTime = CMTime.zero
+    internal var _totalDuration: CMTime = CMTime.zero
     internal var _clips: [NextLevelClip] = []
     internal var _clipFilenameCount: Int = 0
 
@@ -322,9 +316,9 @@ extension NextLevelSession {
                     }
                     
                     if writer.startWriting() {
-                        self._currentClipHasStarted = true
                         self._timeOffset = CMTime.zero
                         self._startTimestamp = CMTime.invalid
+                        self._currentClipHasStarted = true
                     } else {
                         print("NextLevel, writer encountered an error \(String(describing: writer.error))")
                         self._writer = nil
@@ -366,14 +360,13 @@ extension NextLevelSession {
         self.startSessionIfNecessary(timestamp: timestamp)
         
         var frameDuration = minFrameDuration
-        let offsetBufferTimestamp = timestamp - self._timeOffset
+        let offsetBufferTimestamp = CMTimeSubtract(timestamp, self._timeOffset)
         
-        if let videoConfig = self._videoConfiguration,
-            let timeScale = videoConfig.timescale,
+        if let timeScale = self._videoConfiguration?.timescale,
             timeScale != 1.0 {
-            let scaledDuration = duration.multiply(by: timeScale)
+            let scaledDuration = minFrameDuration.multiply(by: timeScale)
             if self._currentClipDuration.value > 0 {
-                self._timeOffset = self._timeOffset + (duration - scaledDuration)
+                self._timeOffset = CMTimeAdd(self._timeOffset, CMTimeSubtract(minFrameDuration, scaledDuration))
             }
             frameDuration = scaledDuration
         }
@@ -389,14 +382,13 @@ extension NextLevelSession {
                 bufferToProcess = sampleBuffer.imageBuffer
             }
             
-            if let bufferToProcess = bufferToProcess {
-                if pixelBufferAdapter.append(bufferToProcess, withPresentationTime: offsetBufferTimestamp) {
-                    self._currentClipDuration = (offsetBufferTimestamp + frameDuration) - self._startTimestamp
-                    self._lastVideoTimestamp = timestamp
-                    self._currentClipHasVideo = true
-                    completionHandler(true)
-                    return
-                }
+            if let bufferToProcess = bufferToProcess,
+                pixelBufferAdapter.append(bufferToProcess, withPresentationTime: offsetBufferTimestamp) {
+                self._currentClipDuration = CMTimeSubtract(CMTimeAdd(offsetBufferTimestamp, frameDuration), self._startTimestamp)
+                self._lastVideoTimestamp = timestamp
+                self._currentClipHasVideo = true
+                completionHandler(true)
+                return
             }
         }
         completionHandler(false)
@@ -416,14 +408,13 @@ extension NextLevelSession {
         self.startSessionIfNecessary(timestamp: timestamp)
         
         var frameDuration = minFrameDuration
-        let offsetBufferTimestamp = timestamp - self._timeOffset
+        let offsetBufferTimestamp = CMTimeSubtract(timestamp, self._timeOffset)
         
-        if let videoConfig = self._videoConfiguration,
-            let timeScale = videoConfig.timescale,
+        if let timeScale = self._videoConfiguration?.timescale,
             timeScale != 1.0 {
-            let scaledDuration = duration.multiply(by: timeScale)
+            let scaledDuration = minFrameDuration.multiply(by: timeScale)
             if self._currentClipDuration.value > 0 {
-                self._timeOffset = self._timeOffset + (duration - scaledDuration)
+                self._timeOffset = CMTimeAdd(self._timeOffset, CMTimeSubtract(minFrameDuration, scaledDuration))
             }
             frameDuration = scaledDuration
         }
@@ -441,7 +432,7 @@ extension NextLevelSession {
             
             if let bufferToProcess = bufferToProcess,
                 pixelBufferAdapter.append(bufferToProcess, withPresentationTime: offsetBufferTimestamp) {
-                self._currentClipDuration = (offsetBufferTimestamp + frameDuration) - self._startTimestamp
+                self._currentClipDuration = CMTimeSubtract(CMTimeAdd(offsetBufferTimestamp, frameDuration), self._startTimestamp)
                 self._lastVideoTimestamp = timestamp
                 self._currentClipHasVideo = true
                 completionHandler(true)
@@ -462,23 +453,24 @@ extension NextLevelSession {
         let duration = sampleBuffer.duration
         if let adjustedBuffer = CMSampleBuffer.createSampleBuffer(fromSampleBuffer: sampleBuffer, withTimeOffset: self._timeOffset, duration: duration) {
             let presentationTimestamp = adjustedBuffer.presentationTimeStamp
-            let lastTimestamp = presentationTimestamp + duration
+            let lastTimestamp = CMTimeAdd(presentationTimestamp, duration)
             
             self._audioQueue.async {
                 if let audioInput = self._audioInput,
-                    audioInput.isReadyForMoreMediaData && audioInput.append(adjustedBuffer) {
+                    audioInput.isReadyForMoreMediaData,
+                    audioInput.append(adjustedBuffer) {
                     self._lastAudioTimestamp = lastTimestamp
                     
                     if !self.currentClipHasVideo {
-                        self._currentClipDuration = lastTimestamp - self._startTimestamp
+                        self._currentClipDuration = CMTimeSubtract(lastTimestamp, self._startTimestamp)
                     }
                     
                     self._currentClipHasAudio = true
                     
                     completionHandler(true)
-                    return
+                } else {
+                    completionHandler(false)
                 }
-                completionHandler(false)
             }
         }
     }
@@ -499,9 +491,7 @@ extension NextLevelSession {
     private func startSessionIfNecessary(timestamp: CMTime) {
         if !self._startTimestamp.isValid {
             self._startTimestamp = timestamp
-            if let writer = self._writer {
-                writer.startSession(atSourceTime: timestamp)
-            }
+            self._writer?.startSession(atSourceTime: timestamp)
         }
     }
     
@@ -530,7 +520,7 @@ extension NextLevelSession {
     public func endClip(completionHandler: NextLevelSessionEndClipCompletionHandler?) {
         self.executeClosureSyncOnSessionQueueIfNecessary {
             self._audioQueue.sync {
-                if self.currentClipHasStarted {
+                if self._currentClipHasStarted {
                     self._currentClipHasStarted = false
                     
                     if let writer = self._writer {
@@ -539,18 +529,36 @@ extension NextLevelSession {
                             
                             self.removeFile(fileUrl: writer.outputURL)
                             self.destroyWriter()
-                            
+
                             if let completionHandler = completionHandler {
-                                self.executeClosureAsyncOnMainQueueIfNecessary {
+                                DispatchQueue.main.async {
                                     completionHandler(nil, nil)
                                 }
                             }
-                            
                         } else {
-                            writer.endSession(atSourceTime: (self._currentClipDuration + self._startTimestamp))
+                            //print("ending session \(CMTimeGetSeconds(self._currentClipDuration))")
+                            writer.endSession(atSourceTime: CMTimeAdd(self._currentClipDuration, self._startTimestamp))
                             writer.finishWriting(completionHandler: {
-                                // TODO support info dictionaries
-                                self.appendClip(withClipURL: writer.outputURL, infoDict: nil, error: writer.error, completionHandler: completionHandler)
+                                self.executeClosureSyncOnSessionQueueIfNecessary {
+                                    var clip: NextLevelClip? = nil
+                                    let url = writer.outputURL
+                                    let error = writer.error
+                                    
+                                    if error == nil {
+                                        clip = NextLevelClip(url: url, infoDict: nil)
+                                        if let clip = clip {
+                                            self.add(clip: clip)
+                                        }
+                                    }
+                                    
+                                    self.destroyWriter()
+                                    
+                                    if let completionHandler = completionHandler {
+                                        DispatchQueue.main.async {
+                                            completionHandler(clip, error)
+                                        }
+                                    }
+                                }
                             })
                             return
                         }
@@ -558,24 +566,9 @@ extension NextLevelSession {
                 }
                 
                 if let completionHandler = completionHandler {
-                    self.executeClosureAsyncOnMainQueueIfNecessary {
+                    DispatchQueue.main.async {
                         completionHandler(nil, NextLevelError.notReadyToRecord)
                     }
-                }
-            }
-        }
-    }
-    
-    private func appendClip(withClipURL url: URL, infoDict: [String : Any]?, error: Error?, completionHandler: NextLevelSessionEndClipCompletionHandler?) {
-        self.executeClosureSyncOnSessionQueueIfNecessary {
-            let clip = NextLevelClip(url: url, infoDict: infoDict)
-            self.add(clip: clip)
-            
-            self.destroyWriter()
-            
-            self.executeClosureAsyncOnMainQueueIfNecessary {
-                if let completionHandler = completionHandler {
-                    completionHandler(clip, error)
                 }
             }
         }
@@ -594,7 +587,7 @@ extension NextLevelSession {
         get {
             var lastClipUrl: URL? = nil
             if !self._clips.isEmpty,
-                let lastClip: NextLevelClip = self.clips.last,
+                let lastClip = self.clips.last,
                 let clipURL = lastClip.url {
                 lastClipUrl = clipURL
             }
@@ -608,7 +601,7 @@ extension NextLevelSession {
     public func add(clip: NextLevelClip) {
         self.executeClosureSyncOnSessionQueueIfNecessary {
             self._clips.append(clip)
-            self._duration = self._duration + clip.duration
+            self._totalDuration = CMTimeAdd(self._totalDuration, clip.duration)
         }
     }
     
@@ -620,7 +613,7 @@ extension NextLevelSession {
     public func add(clip: NextLevelClip, at idx: Int) {
         self.executeClosureSyncOnSessionQueueIfNecessary {
             self._clips.insert(clip, at: idx)
-            self._duration = self._duration + clip.duration
+            self._totalDuration = CMTimeAdd(self._totalDuration, clip.duration)
         }
     }
     
@@ -633,7 +626,7 @@ extension NextLevelSession {
                 return clip.uuid == clipToEvaluate.uuid
             }) {
                 self._clips.remove(at: idx)
-                self._duration = self._duration - clip.duration
+                self._totalDuration = CMTimeSubtract(self._totalDuration, clip.duration)
             }
         }
     }
@@ -647,7 +640,7 @@ extension NextLevelSession {
         self.executeClosureSyncOnSessionQueueIfNecessary {
             if self._clips.indices.contains(idx) {
                 let clip = self._clips.remove(at: idx)
-                self._duration = self._duration - clip.duration
+                self._totalDuration = CMTimeSubtract(self._totalDuration, clip.duration)
                 
                 if removeFile {
                     clip.removeFile()
@@ -669,7 +662,7 @@ extension NextLevelSession {
                     self._clips.removeFirst()
                 }
             }
-            self._duration = CMTime.zero
+            self._totalDuration = CMTime.zero
         }
     }
 
