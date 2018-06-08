@@ -90,7 +90,7 @@ public class NextLevelSession {
     /// Duration of a session, the sum of all recorded clips.
     public var totalDuration: CMTime {
         get {
-            return CMTimeAdd(self._totalDuration, self._currentClipDuration)
+            return self._totalDuration.add(self._currentClipDuration)
         }
     }
 
@@ -360,13 +360,13 @@ extension NextLevelSession {
         self.startSessionIfNecessary(timestamp: timestamp)
         
         var frameDuration = minFrameDuration
-        let offsetBufferTimestamp = CMTimeSubtract(timestamp, self._timeOffset)
+        let offsetBufferTimestamp = timestamp.subtract(self._timeOffset)
         
         if let timeScale = self._videoConfiguration?.timescale,
             timeScale != 1.0 {
             let scaledDuration = minFrameDuration.multiply(by: timeScale)
             if self._currentClipDuration.value > 0 {
-                self._timeOffset = CMTimeAdd(self._timeOffset, CMTimeSubtract(minFrameDuration, scaledDuration))
+                self._timeOffset = self._timeOffset.add(minFrameDuration.subtract(scaledDuration))
             }
             frameDuration = scaledDuration
         }
@@ -384,7 +384,7 @@ extension NextLevelSession {
             
             if let bufferToProcess = bufferToProcess,
                 pixelBufferAdapter.append(bufferToProcess, withPresentationTime: offsetBufferTimestamp) {
-                self._currentClipDuration = CMTimeSubtract(CMTimeAdd(offsetBufferTimestamp, frameDuration), self._startTimestamp)
+                self._currentClipDuration = offsetBufferTimestamp.add(frameDuration).subtract(self._startTimestamp)
                 self._lastVideoTimestamp = timestamp
                 self._currentClipHasVideo = true
                 completionHandler(true)
@@ -408,13 +408,13 @@ extension NextLevelSession {
         self.startSessionIfNecessary(timestamp: timestamp)
         
         var frameDuration = minFrameDuration
-        let offsetBufferTimestamp = CMTimeSubtract(timestamp, self._timeOffset)
+        let offsetBufferTimestamp = timestamp.subtract(self._timeOffset)
         
         if let timeScale = self._videoConfiguration?.timescale,
             timeScale != 1.0 {
             let scaledDuration = minFrameDuration.multiply(by: timeScale)
             if self._currentClipDuration.value > 0 {
-                self._timeOffset = CMTimeAdd(self._timeOffset, CMTimeSubtract(minFrameDuration, scaledDuration))
+                self._timeOffset = self._timeOffset.add(minFrameDuration.subtract(scaledDuration))
             }
             frameDuration = scaledDuration
         }
@@ -432,7 +432,7 @@ extension NextLevelSession {
             
             if let bufferToProcess = bufferToProcess,
                 pixelBufferAdapter.append(bufferToProcess, withPresentationTime: offsetBufferTimestamp) {
-                self._currentClipDuration = CMTimeSubtract(CMTimeAdd(offsetBufferTimestamp, frameDuration), self._startTimestamp)
+                self._currentClipDuration = (offsetBufferTimestamp.add(frameDuration)).subtract(self._startTimestamp)
                 self._lastVideoTimestamp = timestamp
                 self._currentClipHasVideo = true
                 completionHandler(true)
@@ -453,7 +453,7 @@ extension NextLevelSession {
         let duration = sampleBuffer.duration
         if let adjustedBuffer = CMSampleBuffer.createSampleBuffer(fromSampleBuffer: sampleBuffer, withTimeOffset: self._timeOffset, duration: duration) {
             let presentationTimestamp = adjustedBuffer.presentationTimeStamp
-            let lastTimestamp = CMTimeAdd(presentationTimestamp, duration)
+            let lastTimestamp = presentationTimestamp.add(duration)
             
             self._audioQueue.async {
                 if let audioInput = self._audioInput,
@@ -462,7 +462,7 @@ extension NextLevelSession {
                     self._lastAudioTimestamp = lastTimestamp
                     
                     if !self.currentClipHasVideo {
-                        self._currentClipDuration = CMTimeSubtract(lastTimestamp, self._startTimestamp)
+                        self._currentClipDuration = lastTimestamp.subtract(self._startTimestamp)
                     }
                     
                     self._currentClipHasAudio = true
@@ -537,7 +537,7 @@ extension NextLevelSession {
                             }
                         } else {
                             //print("ending session \(CMTimeGetSeconds(self._currentClipDuration))")
-                            writer.endSession(atSourceTime: CMTimeAdd(self._currentClipDuration, self._startTimestamp))
+                            writer.endSession(atSourceTime: self._currentClipDuration.add(self._startTimestamp))
                             writer.finishWriting(completionHandler: {
                                 self.executeClosureSyncOnSessionQueueIfNecessary {
                                     var clip: NextLevelClip? = nil
@@ -601,7 +601,7 @@ extension NextLevelSession {
     public func add(clip: NextLevelClip) {
         self.executeClosureSyncOnSessionQueueIfNecessary {
             self._clips.append(clip)
-            self._totalDuration = CMTimeAdd(self._totalDuration, clip.duration)
+            self._totalDuration = self._totalDuration.add(clip.duration)
         }
     }
     
@@ -613,7 +613,7 @@ extension NextLevelSession {
     public func add(clip: NextLevelClip, at idx: Int) {
         self.executeClosureSyncOnSessionQueueIfNecessary {
             self._clips.insert(clip, at: idx)
-            self._totalDuration = CMTimeAdd(self._totalDuration, clip.duration)
+            self._totalDuration = self._totalDuration.add(clip.duration)
         }
     }
     
@@ -626,7 +626,7 @@ extension NextLevelSession {
                 return clip.uuid == clipToEvaluate.uuid
             }) {
                 self._clips.remove(at: idx)
-                self._totalDuration = CMTimeSubtract(self._totalDuration, clip.duration)
+                self._totalDuration = self._totalDuration.subtract(clip.duration)
             }
         }
     }
@@ -640,7 +640,7 @@ extension NextLevelSession {
         self.executeClosureSyncOnSessionQueueIfNecessary {
             if self._clips.indices.contains(idx) {
                 let clip = self._clips.remove(at: idx)
-                self._totalDuration = CMTimeSubtract(self._totalDuration, clip.duration)
+                self._totalDuration = self._totalDuration.subtract(clip.duration)
                 
                 if removeFile {
                     clip.removeFile()
