@@ -62,6 +62,7 @@ public class NextLevelConfiguration {
 // MARK: - VideoConfiguration
 
 let NextLevelVideoConfigurationDefaultBitRate: Int = 2000000
+let NextLevelVideoConfigurationDefaultFrameRate: Int = 60
 
 /// NextLevelVideoConfiguration, video capture configuration object
 public class NextLevelVideoConfiguration: NextLevelConfiguration {
@@ -111,6 +112,8 @@ public class NextLevelVideoConfiguration: NextLevelConfiguration {
     
     /// Average video bit rate (bits per second), AV dictionary key AVVideoAverageBitRateKey
     public var bitRate: Int = NextLevelVideoConfigurationDefaultBitRate
+    
+    public var frameRate: Int = NextLevelVideoConfigurationDefaultFrameRate
 
     /// Dimensions for video output, AV dictionary keys AVVideoWidthKey, AVVideoHeightKey
     public var dimensions: CGSize?

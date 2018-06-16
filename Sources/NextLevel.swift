@@ -2449,10 +2449,11 @@ extension NextLevel {
         if self._recording && (session.isAudioReady || self.captureMode == .videoWithoutAudio) && session.currentClipHasStarted {
             self.beginRecordingNewClipIfNecessary()
             
-            let minTimeBetweenFrames = 0.004
+            let minTimeBetweenFrames = 1.0/Double(videoConfiguration.frameRate)
             let sleepDuration = minTimeBetweenFrames - (CACurrentMediaTime() - self._lastVideoFrameTimeInterval)
             if sleepDuration > 0 {
-                Thread.sleep(forTimeInterval: sleepDuration)
+//                Thread.sleep(forTimeInterval: sleepDuration)
+                return
             }
             
             if let device = self._currentDevice {
