@@ -451,27 +451,22 @@ extension NextLevelSession {
         self.startSessionIfNecessary(timestamp: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
         
         let duration = CMSampleBufferGetDuration(sampleBuffer)
-        if let adjustedBuffer = CMSampleBuffer.createSampleBuffer(fromSampleBuffer: sampleBuffer, withTimeOffset: self._timeOffset, duration: duration) {
-            let presentationTimestamp = CMSampleBufferGetPresentationTimeStamp(adjustedBuffer)
-            let lastTimestamp = CMTimeAdd(presentationTimestamp, duration)
+        let presentationTimestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        let lastTimestamp = CMTimeAdd(presentationTimestamp, duration)
+        if let audioInput = self._audioInput,
+            audioInput.isReadyForMoreMediaData,
+            audioInput.append(sampleBuffer) {
+            self._lastAudioTimestamp = lastTimestamp
             
-            self._audioQueue.async {
-                if let audioInput = self._audioInput,
-                    audioInput.isReadyForMoreMediaData,
-                    audioInput.append(adjustedBuffer) {
-                    self._lastAudioTimestamp = lastTimestamp
-                    
-                    if !self.currentClipHasVideo {
-                        self._currentClipDuration = CMTimeSubtract(lastTimestamp, self._startTimestamp)
-                    }
-                    
-                    self._currentClipHasAudio = true
-                    
-                    completionHandler(true)
-                } else {
-                    completionHandler(false)
-                }
+            if !self.currentClipHasVideo {
+                self._currentClipDuration = CMTimeSubtract(lastTimestamp, self._startTimestamp)
             }
+            
+            self._currentClipHasAudio = true
+            
+            completionHandler(true)
+        } else {
+            completionHandler(false)
         }
     }
     

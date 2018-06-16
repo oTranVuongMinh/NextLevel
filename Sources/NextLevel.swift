@@ -729,6 +729,7 @@ public class NextLevel: NSObject {
     internal var _recording: Bool = false
     internal var _recordingSession: NextLevelSession?
     internal var _lastVideoFrameTimeInterval: TimeInterval = 0
+    internal var _lastAudioSampleTimeInterval: TimeInterval = 0
     
     internal var _videoCustomContextRenderingEnabled: Bool = false
     internal var _sessionVideoCustomContextImageBuffer: CVPixelBuffer?
@@ -2448,9 +2449,9 @@ extension NextLevel {
         
         if self._recording && (session.isAudioReady || self.captureMode == .videoWithoutAudio) && session.currentClipHasStarted {
             self.beginRecordingNewClipIfNecessary()
-            
+            let current = CACurrentMediaTime()
             let minTimeBetweenFrames = 1.0/Double(videoConfiguration.frameRate)
-            let sleepDuration = minTimeBetweenFrames - (CACurrentMediaTime() - self._lastVideoFrameTimeInterval)
+            let sleepDuration = minTimeBetweenFrames - (current - self._lastVideoFrameTimeInterval)
             if sleepDuration > 0 {
 //                Thread.sleep(forTimeInterval: sleepDuration)
                 return
@@ -2479,7 +2480,7 @@ extension NextLevel {
                     }
                     
                     // process frame
-                    self._lastVideoFrameTimeInterval = CACurrentMediaTime()
+                    self._lastVideoFrameTimeInterval = current
                     if success == true {
                         self.executeClosureAsyncOnMainQueueIfNecessary {
                             self.videoDelegate?.nextLevel(self, didAppendVideoSampleBuffer: sampleBuffer, inSession: session)
@@ -2593,7 +2594,15 @@ extension NextLevel {
         if self._recording && session.isVideoReady && session.currentClipHasStarted && session.currentClipHasVideo {
             self.beginRecordingNewClipIfNecessary()
             
+            let current = CACurrentMediaTime()
+            let minTimeBetweenSamples = 1.0/NextLevelAudioConfigurationDefaultSampleRate
+            let sleepDuration = minTimeBetweenSamples - (current - self._lastAudioSampleTimeInterval)
+            if sleepDuration > 0 {
+                return
+            }
+            
             session.appendAudio(withSampleBuffer: sampleBuffer, completionHandler: { (success: Bool) -> Void in
+                self._lastAudioSampleTimeInterval = current
                 if success {
                     self.executeClosureAsyncOnMainQueueIfNecessary {
                         self.videoDelegate?.nextLevel(self, didAppendAudioSampleBuffer: sampleBuffer, inSession: session)
